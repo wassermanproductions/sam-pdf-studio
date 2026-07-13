@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/images/logo.png" alt="Sam PDF Studio" width="380">
+</p>
+
 # Sam PDF Studio
 
 A native macOS PDF editor with the working feel of PDF Expert: click the page and it happens — no coordinates, no forms, no output-folder litter. A SwiftUI/PDFKit front end drives a local PDF engine, so every document stays on your Mac.

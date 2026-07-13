@@ -38,6 +38,9 @@ chmod +x "$APP_BINARY"
 cp "$ROOT_DIR/Engine/pdf_engine.py" "$APP_CONTENTS/Resources/pdf_engine.py"
 ENGINE_SCRIPT="$APP_CONTENTS/Resources/pdf_engine.py"
 
+# App icon (Dock, Finder, About window). CFBundleIconFile points at this.
+cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_CONTENTS/Resources/AppIcon.icns"
+
 cat >"$INFO_PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -49,6 +52,8 @@ cat >"$INFO_PLIST" <<PLIST
   <string>$BUNDLE_ID</string>
   <key>CFBundleName</key>
   <string>Sam PDF Studio</string>
+  <key>CFBundleIconFile</key>
+  <string>AppIcon</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>LSMinimumSystemVersion</key>
