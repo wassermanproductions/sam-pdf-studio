@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use Sam PDF Studio in your work, please cite it and credit Sam Wasserman (wassermanproductions.com), per the project's NOTICE and Section 4(d) of the Apache License 2.0."
+title: "Sam PDF Studio"
+abstract: "A native macOS PDF editor: edit text in place with matching font and style, move and reflow paragraphs, drop in new text anywhere, merge and rearrange pages, annotate, redline, fill and sign, and reduce, resize, number, or password-protect documents."
+type: software
+authors:
+  - family-names: "Wasserman"
+    given-names: "Sam"
+    website: "https://wassermanproductions.com"
+version: "1.0.0"
+date-released: "2026-07-13"
+license: "Apache-2.0"
+url: "https://github.com/wassermanproductions/sam-pdf-studio"
+repository-code: "https://github.com/wassermanproductions/sam-pdf-studio"
+keywords:
+  - pdf
+  - pdf-editor
+  - macos
+  - document-editing
+  - annotation
+  - fill-and-sign

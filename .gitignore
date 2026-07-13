@@ -1,0 +1,8 @@
+.build/
+dist/
+output/
+tmp/
+Engine/.venv/
+.DS_Store
+__pycache__/
+*.pyc
