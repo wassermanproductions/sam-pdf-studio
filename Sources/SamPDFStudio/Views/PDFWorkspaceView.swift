@@ -90,6 +90,9 @@ struct PDFWorkspaceView: View {
                         },
                         onNoteSelection: { selection in
                             store.noteOnSelection(selection)
+                        },
+                        onAnnotationEdited: { title in
+                            store.annotationEdited(title: title)
                         }
                     )
                 }

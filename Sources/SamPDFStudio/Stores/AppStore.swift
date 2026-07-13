@@ -616,6 +616,15 @@ final class AppStore: ObservableObject {
         commitDocumentChange(title: "Link")
     }
 
+    /// Commit an in-place annotation change (moved or deleted in Edit mode) as
+    /// a new document version, so it walks Undo/Redo and persists on Save.
+    /// The moved/removed annotation already lives on the in-memory document, so
+    /// this just snapshots the current state.
+    func annotationEdited(title: String) {
+        guard document != nil else { return }
+        commitDocumentChange(title: title)
+    }
+
     // MARK: - Fill & Sign (engine)
 
     func fillSignClick(page: Int, x: Double, y: Double) {

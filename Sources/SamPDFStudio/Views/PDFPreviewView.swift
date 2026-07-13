@@ -46,6 +46,7 @@ struct PDFPreviewView: NSViewRepresentable {
     let onRedlineSelection: (PDFSelection) -> Void
     let onRedlineCaret: (Int, Double, Double) -> Void
     let onNoteSelection: (PDFSelection) -> Void
+    let onAnnotationEdited: (String) -> Void
 
     final class Coordinator {
         var selectedText: Binding<String>
@@ -563,7 +564,22 @@ struct PDFPreviewView: NSViewRepresentable {
         var onRedlineSelection: ((PDFSelection) -> Void)?
         var onRedlineCaret: ((Int, Double, Double) -> Void)?
         var onNoteSelection: ((PDFSelection) -> Void)?
+        /// Commit an in-place annotation move/delete (Edit mode) as a version.
+        var onAnnotationEdited: ((String) -> Void)?
         private var noteDownViewPoint: NSPoint?
+
+        // Annotations placed in Annotate/Fill&Sign (notes, text boxes, stamps,
+        // signatures) can be grabbed and moved — or deleted — in Edit mode.
+        static let movableAnnotationTypes: Set<String> =
+            ["Text", "FreeText", "Stamp", "Square", "Circle", "Ink", "Line"]
+        static let deletableAnnotationTypes: Set<String> =
+            ["Text", "FreeText", "Stamp", "Square", "Circle", "Ink", "Line",
+             "Highlight", "Underline", "StrikeOut"]
+        private var selectedAnnotation: PDFAnnotation?
+        private var draggingAnnotation: PDFAnnotation?
+        private var draggingAnnotationPage: PDFPage?
+        private var annotationDragLastPagePoint: CGPoint?
+        private var annotationDragMoved = false
 
         var selectedEnginePage: Int = 1
         var selectedEngineRect: String = ""
@@ -739,6 +755,25 @@ struct PDFPreviewView: NSViewRepresentable {
                     if blockEditor != nil {
                         return
                     }
+                    // Grab an existing annotation (note, text box, signature,
+                    // shape) placed via Annotate/Fill & Sign — click to select
+                    // (Delete removes it), drag to move it. Falls through to
+                    // text editing when the click misses every annotation.
+                    if let target = pageTarget(at: viewPoint),
+                       let page = document?.page(at: target.pageIndex),
+                       let annotation = page.annotation(at: target.pagePoint),
+                       let type = annotation.type,
+                       Self.deletableAnnotationTypes.contains(type) {
+                        selectedAnnotation = annotation
+                        if Self.movableAnnotationTypes.contains(type) {
+                            draggingAnnotation = annotation
+                            draggingAnnotationPage = page
+                            annotationDragLastPagePoint = convert(viewPoint, to: page)
+                            annotationDragMoved = false
+                        }
+                        return
+                    }
+                    selectedAnnotation = nil
                     lastBlockClickViewPoint = viewPoint
                     editorLog.info("mouseDown contentText -> editBlock at view (\(viewPoint.x), \(viewPoint.y))")
                     placeAtClick(viewPoint) { [weak self] page, x, y in
@@ -826,6 +861,23 @@ struct PDFPreviewView: NSViewRepresentable {
             if isEditingEnabled {
                 switch editTool {
                 case .contentText:
+                    if let annotation = draggingAnnotation,
+                       let page = draggingAnnotationPage,
+                       let last = annotationDragLastPagePoint {
+                        let now = convert(viewPoint, to: page)
+                        let dx = now.x - last.x
+                        let dy = now.y - last.y
+                        if dx != 0 || dy != 0 {
+                            let oldBounds = annotation.bounds
+                            annotation.bounds = oldBounds.offsetBy(dx: dx, dy: dy)
+                            annotationDragLastPagePoint = now
+                            annotationDragMoved = true
+                            let dirty = convert(oldBounds, from: page)
+                                .union(convert(annotation.bounds, from: page))
+                                .insetBy(dx: -6, dy: -6)
+                            setNeedsDisplay(dirty)
+                        }
+                    }
                     return
                 case .grab, .link:
                     continueGrab(to: viewPoint)
@@ -851,6 +903,14 @@ struct PDFPreviewView: NSViewRepresentable {
             if isEditingEnabled {
                 switch editTool {
                 case .contentText:
+                    if draggingAnnotation != nil {
+                        let moved = annotationDragMoved
+                        draggingAnnotation = nil
+                        draggingAnnotationPage = nil
+                        annotationDragLastPagePoint = nil
+                        annotationDragMoved = false
+                        if moved { onAnnotationEdited?("Move Annotation") }
+                    }
                     return
                 case .grab, .link:
                     finishGrab(at: viewPoint)
@@ -904,6 +964,24 @@ struct PDFPreviewView: NSViewRepresentable {
         }
 
         override func keyDown(with event: NSEvent) {
+            // Delete / Forward-delete removes an annotation selected in Edit
+            // mode (Delete=51, Fn+Delete=117).
+            if isEditingEnabled, blockEditor == nil,
+               editTool == .contentText,
+               event.keyCode == 51 || event.keyCode == 117,
+               let annotation = selectedAnnotation, let page = annotation.page {
+                page.removeAnnotation(annotation)
+                selectedAnnotation = nil
+                setNeedsDisplay(bounds)
+                onAnnotationEdited?("Delete Annotation")
+                return
+            }
+            // Escape clears an annotation selection.
+            if isEditingEnabled, editTool == .contentText,
+               event.keyCode == 53, selectedAnnotation != nil {
+                selectedAnnotation = nil
+                return
+            }
             if isEditingEnabled,
                editTool == .grab,
                event.modifierFlags.intersection(.deviceIndependentFlagsMask).contains(.command),
@@ -1743,6 +1821,7 @@ struct PDFPreviewView: NSViewRepresentable {
         view.onRedlineSelection = onRedlineSelection
         view.onRedlineCaret = onRedlineCaret
         view.onNoteSelection = onNoteSelection
+        view.onAnnotationEdited = onAnnotationEdited
     }
 
     private func updateSelection(_ selection: PDFSelection, pdfView: PDFView, coordinator: Coordinator) {
