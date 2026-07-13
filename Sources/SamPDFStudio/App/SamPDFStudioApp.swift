@@ -22,6 +22,12 @@ private struct AppCommands: Commands {
     @ObservedObject var store: AppStore
 
     var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("About Sam PDF Studio") {
+                showAboutPanel()
+            }
+        }
+
         CommandGroup(replacing: .newItem) {
             Button("Open PDF…") {
                 store.openPDF()
@@ -107,6 +113,43 @@ private struct AppCommands: Commands {
             }
         }
     }
+}
+
+/// Custom "About Sam PDF Studio" panel: credits the author with clickable
+/// links to his sites and states the Apache 2.0 license. The copyright line
+/// comes from Info.plist (NSHumanReadableCopyright).
+private func showAboutPanel() {
+    let center = NSMutableParagraphStyle()
+    center.alignment = .center
+    center.paragraphSpacing = 2
+
+    let base: [NSAttributedString.Key: Any] = [
+        .font: NSFont.systemFont(ofSize: 11),
+        .paragraphStyle: center,
+        .foregroundColor: NSColor.labelColor
+    ]
+
+    let credits = NSMutableAttributedString()
+    credits.append(NSAttributedString(string: "A native macOS PDF editor.\n\n", attributes: base))
+
+    credits.append(NSAttributedString(string: "Created by ", attributes: base))
+    var name = base
+    name[.font] = NSFont.boldSystemFont(ofSize: 11)
+    credits.append(NSAttributedString(string: "Sam Wasserman\n", attributes: name))
+
+    func link(_ text: String, _ url: String) {
+        var attrs = base
+        attrs[.link] = URL(string: url)
+        credits.append(NSAttributedString(string: text, attributes: attrs))
+    }
+    link("wassermanproductions.com", "https://wassermanproductions.com")
+    credits.append(NSAttributedString(string: "  ·  ", attributes: base))
+    link("wasserman.ai", "https://wasserman.ai")
+
+    credits.append(NSAttributedString(string: "\n\nLicensed under the Apache License 2.0.", attributes: base))
+
+    NSApp.orderFrontStandardAboutPanel(options: [.credits: credits])
+    NSApp.activate(ignoringOtherApps: true)
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
