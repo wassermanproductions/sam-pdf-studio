@@ -77,6 +77,17 @@ QA scratch files land in `tmp/pdfs/qa`.
 
 PDFs do not behave like Word documents internally. The app uses the practical strategy common to non-Adobe editors: locate visible text, redact the old glyphs, then write replacement text into the same region. This works well for forms, invoices, drafts, labels, and quick corrections. Deep reflow of arbitrary PDF content is a much harder class of editor — for that, export to Word, edit, and re-export.
 
+## Agent control (MCP)
+
+Any MCP agent — **Hermes, Claude Code, Codex, or any other MCP client** — can drive the PDF engine **headlessly** (no GUI): merge, split, redact, add text, OCR, convert, and page operations, all on local file paths. The server lives in [`mcp/`](mcp/) here and is also published standalone as [**sam-pdf-studio-mcp**](https://github.com/wassermanproductions/sam-pdf-studio-mcp).
+
+```bash
+# Claude Code
+claude mcp add sam-pdf-studio -- node /absolute/path/to/SamPDFStudio/mcp/sam-pdf-studio-mcp.mjs
+```
+
+It shells out to the same bundled PyMuPDF engine the app uses, so file paths go in and new file paths come out — inputs are never modified in place. See [`mcp/README.md`](mcp/README.md) for the full tool list and Hermes/Codex/generic setup.
+
 ## License & credits
 
 **Apache License 2.0** — see [LICENSE](LICENSE). Free to use, modify, fork, and build on, commercially or otherwise.

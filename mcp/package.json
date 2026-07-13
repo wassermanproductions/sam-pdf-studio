@@ -1,0 +1,13 @@
+{
+  "name": "sam-pdf-studio-mcp",
+  "version": "1.0.0",
+  "description": "Headless MCP stdio bridge for Sam PDF Studio — run its PyMuPDF engine (merge, split, redact, OCR, convert, and more) on local PDF files from Hermes, Claude Code, Codex, or any MCP client, no GUI required.",
+  "type": "module",
+  "bin": { "sam-pdf-studio-mcp": "./sam-pdf-studio-mcp.mjs" },
+  "engines": { "node": ">=18" },
+  "author": "Sam Wasserman (https://wassermanproductions.com)",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/wassermanproductions/sam-pdf-studio-mcp",
+  "repository": { "type": "git", "url": "https://github.com/wassermanproductions/sam-pdf-studio-mcp.git" },
+  "keywords": ["mcp", "model-context-protocol", "pdf", "pymupdf", "ocr", "sam-pdf-studio", "hermes"]
+}
