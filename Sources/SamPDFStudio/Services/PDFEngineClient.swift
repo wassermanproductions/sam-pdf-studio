@@ -210,7 +210,8 @@ final class PDFEngineClient {
         background: String? = nil,
         lineHeight: Double = 0,
         trackOriginal: String? = nil,
-        originalText: String? = nil
+        originalText: String? = nil,
+        colorRunsJSON: String? = nil
     ) throws -> EngineCommandResult {
         var args = [
             "replace-block",
@@ -252,6 +253,9 @@ final class PDFEngineClient {
         }
         if let originalText, !originalText.isEmpty {
             args.append(contentsOf: ["--original-text", originalText])
+        }
+        if let colorRunsJSON, !colorRunsJSON.isEmpty {
+            args.append(contentsOf: ["--color-runs", colorRunsJSON])
         }
         return try run(args)
     }

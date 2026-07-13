@@ -46,6 +46,10 @@ struct PDFWorkspaceView: View {
                         onCancelNewText: { draft in
                             store.cancelNewText(draft: draft)
                         },
+                        onBlockSelectionChanged: { range, length in
+                            store.activeBlockSelection = range
+                            store.activeBlockTextLength = length
+                        },
                         onCopyRegion: {
                             store.copySelectedRegion()
                         },

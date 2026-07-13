@@ -29,6 +29,7 @@ struct PDFPreviewView: NSViewRepresentable {
     let onMoveBlock: (ActiveTextBlock, String, Double, Double) -> Void
     let onCommitNewText: (NewTextDraft, String) -> Void
     let onCancelNewText: (NewTextDraft) -> Void
+    let onBlockSelectionChanged: (NSRange, Int) -> Void
     let onCopyRegion: () -> Void
     let onPasteRegion: (Int, Double, Double) -> Void
     let onMoveRegion: (Int, Double, Double) -> Void
@@ -178,9 +179,19 @@ struct PDFPreviewView: NSViewRepresentable {
         var onCommit: ((String) -> Void)?
         var onCancel: (() -> Void)?
         var onGrew: (() -> Void)?
+        /// Reports the current selection (range into the full text) and that
+        /// text's length, so the store can recolor just the selected words.
+        var onSelectionChanged: ((NSRange, Int) -> Void)?
         private var finished = false
 
         override var acceptsFirstResponder: Bool { true }
+
+        // Fires on every selection change (mouse, keyboard, or programmatic) —
+        // the one hook that bridges the AppKit text selection up to the store.
+        override func setSelectedRanges(_ ranges: [NSValue], affinity: NSSelectionAffinity, stillSelecting flag: Bool) {
+            super.setSelectedRanges(ranges, affinity: affinity, stillSelecting: flag)
+            onSelectionChanged?(selectedRange(), (string as NSString).length)
+        }
 
         override func keyDown(with event: NSEvent) {
             if event.keyCode == 53 { // Escape
@@ -541,6 +552,9 @@ struct PDFPreviewView: NSViewRepresentable {
         var onMoveBlock: ((ActiveTextBlock, String, Double, Double) -> Void)?
         var onCommitNewText: ((NewTextDraft, String) -> Void)?
         var onCancelNewText: ((NewTextDraft) -> Void)?
+        /// Bridges the block editor's text selection (range, text length) up to
+        /// the store so a Text Color tap can recolor just the selected words.
+        var onBlockSelectionChanged: ((NSRange, Int) -> Void)?
         /// Ground-truth readers. SwiftUI can deliver update passes carrying
         /// STALE captured state — e.g. a nil activeBlock snapshotted before
         /// the click that opened the editor — and acting on those tore live
@@ -1141,6 +1155,8 @@ struct PDFPreviewView: NSViewRepresentable {
                     editor.textView.font = Self.editorFont(for: block, scale: scaleFactor)
                     editor.textView.textColor = NSColor(engineHex: block.colorHex) ?? .black
                     Self.applyUnderline(editor.textView, block.underline)
+                    // Overlay per-word color spans on top of the base color.
+                    Self.applyColorRuns(editor.textView, base: NSColor(engineHex: block.colorHex) ?? .black, runs: block.colorRuns)
                     // Preview the chosen background (white cover when none).
                     editor.textView.backgroundColor = block.backgroundHex
                         .flatMap { NSColor(engineHex: $0) } ?? .white
@@ -1177,6 +1193,12 @@ struct PDFPreviewView: NSViewRepresentable {
                 editor.textView.backgroundColor = bg
             }
             Self.applyUnderline(editor.textView, block.underline)
+            Self.applyColorRuns(editor.textView, base: NSColor(engineHex: block.colorHex) ?? .black, runs: block.colorRuns)
+            // Bridge the AppKit text selection up to the store so a Text Color
+            // tap can recolor just the selected words.
+            editor.textView.onSelectionChanged = { [weak self] range, length in
+                self?.onBlockSelectionChanged?(range, length)
+            }
             editor.representedRect = block.engineRect
             // Store mutations hop through the main queue so a commit fired
             // during a SwiftUI view update never publishes mid-update.
@@ -1466,6 +1488,21 @@ struct PDFPreviewView: NSViewRepresentable {
         static func editorFont(for block: ActiveTextBlock, scale: CGFloat) -> NSFont {
             resolveFont(block.fontFamily ?? block.fontName,
                         size: max(6, block.fontSize * Double(scale)), bold: block.bold, italic: block.italic)
+        }
+
+        /// Live-preview per-word text color: paint the whole text the base
+        /// color, then overlay each run's color on its range (later runs win).
+        static func applyColorRuns(_ textView: NSTextView, base: NSColor, runs: [ColorRun]) {
+            guard let storage = textView.textStorage else { return }
+            let length = storage.length
+            guard length > 0 else { return }
+            storage.addAttribute(.foregroundColor, value: base, range: NSRange(location: 0, length: length))
+            for run in runs {
+                let end = run.start + run.length
+                guard run.start >= 0, run.length > 0, end <= length,
+                      let color = NSColor(engineHex: run.hex) else { continue }
+                storage.addAttribute(.foregroundColor, value: color, range: NSRange(location: run.start, length: run.length))
+            }
         }
 
         // MARK: Lasso / move
@@ -1804,6 +1841,7 @@ struct PDFPreviewView: NSViewRepresentable {
         view.onMoveBlock = onMoveBlock
         view.onCommitNewText = onCommitNewText
         view.onCancelNewText = onCancelNewText
+        view.onBlockSelectionChanged = onBlockSelectionChanged
         view.onCopyRegion = onCopyRegion
         view.onPasteRegion = onPasteRegion
         view.onMoveRegion = onMoveRegion

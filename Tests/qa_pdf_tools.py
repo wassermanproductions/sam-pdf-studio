@@ -213,6 +213,64 @@ def main() -> int:
             assert marks, "tracked-change box missing"
             assert "reviewable text content" in marks[0].info.get("content", ""), "original text not preserved in note"
 
+        # Selection-level (per-word) text color: coloring ONLY the middle word
+        # must recolor just that word — the others stay black (Sam's report:
+        # "highlight one or two words ... changes the whole section").
+        colortext = "alpha beta gamma"
+        runs_src = tmp_path / "runs-src.pdf"
+        rdoc = fitz.open()
+        rpage = rdoc.new_page(width=612, height=792)
+        rpage.insert_text((72, 300), colortext, fontsize=14)
+        # Use the drawn block's own bbox as the replace rect.
+        rblk = next(
+            b for b in rpage.get_text("dict")["blocks"]
+            if any(colortext in "".join(s["text"] for s in l["spans"]) for l in b.get("lines", []))
+        )
+        bx = rblk["bbox"]
+        rdoc.save(str(runs_src))
+        rdoc.close()
+
+        rect_runs = f"{bx[0] - 1},{bx[1] - 1},{bx[2] + 2},{bx[3] + 2}"
+        beta_start = colortext.index("beta")  # 6
+        runs_json = json.dumps([{"start": beta_start, "length": len("beta"), "hex": "#d00000"}])
+        out = tmp_path / "wordcolor.pdf"
+        assert run_engine(
+            "replace-block", "--input", str(runs_src), "--output", str(out), "--page", "1",
+            "--rect", rect_runs, "--text", colortext, "--original-text", colortext,
+            "--color-runs", runs_json,
+        ).get("ok")
+        with fitz.open(str(out)) as d:
+            page = d[0]
+            spans = [
+                s for b in page.get_text("dict")["blocks"]
+                for l in b.get("lines", []) for s in l.get("spans", [])
+            ]
+
+            def span_for(word: str) -> dict:
+                return next(s for s in spans if word in s["text"])
+
+            # PyMuPDF splits differently-colored text into separate spans.
+            beta = span_for("beta")
+            assert beta["color"] == 0xD00000, f"beta not recolored red: {hex(beta['color'])}"
+            for word in ("alpha", "gamma"):
+                s = span_for(word)
+                assert s["color"] == 0x000000, f"{word} should stay black: {hex(s['color'])}"
+
+            # Pixel proof: red only under "beta", never under alpha/gamma.
+            def red_pixels(bbox) -> int:
+                pix = page.get_pixmap(clip=fitz.Rect(bbox), colorspace=fitz.csRGB)
+                count = 0
+                for yy in range(pix.height):
+                    for xx in range(pix.width):
+                        r, g, bl = pix.pixel(xx, yy)
+                        if r > 150 and g < 90 and bl < 90:
+                            count += 1
+                return count
+
+            assert red_pixels(beta["bbox"]) > 0, "no red pixels where beta is"
+            assert red_pixels(span_for("alpha")["bbox"]) == 0, "red bled into alpha"
+            assert red_pixels(span_for("gamma")["bbox"]) == 0, "red bled into gamma"
+
         # Password protection
         out = tmp_path / "locked.pdf"
         assert run_engine("set-password", "--input", str(src), "--output", str(out), "--password", "hunter2").get("ok")

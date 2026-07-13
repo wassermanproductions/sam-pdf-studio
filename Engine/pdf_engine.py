@@ -816,12 +816,13 @@ def resolve_block_style(doc: Any, page: Any, rect: Any, args: argparse.Namespace
     return style, font_kwargs
 
 
-def render_block_text(page: Any, origin_x: float, origin_y: float, width: float, text: str, style: dict[str, Any], font_kwargs: dict[str, Any], line_height: float, expand: float, align: int = 0) -> bool:
+def render_block_text(page: Any, origin_x: float, origin_y: float, width: float, text: str, style: dict[str, Any], font_kwargs: dict[str, Any], line_height: float, expand: float, align: int = 0, color_runs: list | None = None) -> bool:
     """Draw block text with its top-left at (origin_x, origin_y), wrapping at
     the block's width, growing toward the bottom of the page, shrinking only
     if it cannot fit. `align` maps to fitz.TEXT_ALIGN_*; center/right align
     within the block's width box. Draws an underline rule when the resolved
-    style asks for it."""
+    style asks for it. When `color_runs` is set, each character is drawn in the
+    color of the last run covering its global offset (else the style color)."""
     import fitz
 
     font_size = float(style["fontsize"])
@@ -831,6 +832,10 @@ def render_block_text(page: Any, origin_x: float, origin_y: float, width: float,
         min(origin_x + width + expand, page.rect.x1 - 12),
         page.rect.y1 - 12,
     )
+    if color_runs:
+        return render_block_text_colored(
+            page, target, origin_x, origin_y, text, style, font_kwargs, line_height, align, color_runs
+        )
     extra = {}
     if line_height and font_size > 0:
         extra["lineheight"] = max(0.9, min(2.5, line_height / font_size))
@@ -849,6 +854,126 @@ def render_block_text(page: Any, origin_x: float, origin_y: float, width: float,
             if style.get("underline"):
                 bottom = min(page.rect.y1 - 2, origin_y + max(target.height, size * 1.6 * (text.count("\n") + 1)) + 4)
                 draw_text_underlines(page, fitz.Rect(target.x0, target.y0, target.x1, bottom), style.get("color"))
+            return True
+        size -= 0.5
+    return False
+
+
+def color_run_rgb(color_runs: list, default_color: tuple[float, float, float]) -> list[dict[str, Any]]:
+    """Normalize the incoming color-run dicts to {start, length, rgb}, dropping
+    any with an unparseable hex. Order is preserved so a later run wins."""
+    prepared: list[dict[str, Any]] = []
+    for run in color_runs or []:
+        try:
+            start = int(run["start"])
+            length = int(run["length"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        rgb = parse_hex_color(run.get("hex"))
+        if rgb is None or length <= 0:
+            continue
+        prepared.append({"start": start, "length": length, "rgb": rgb})
+    return prepared
+
+
+def _wrap_cells(text: str, font: Any, fontsize: float, max_width: float) -> list[list[tuple[str, int]]]:
+    """Greedy word-wrap `text` into visual lines, carrying each character's
+    GLOBAL offset in the original string (newlines counted, not drawn) so a
+    per-character color lookup stays exact across wrapped lines."""
+    lines: list[list[tuple[str, int]]] = []
+    current: list[tuple[str, int]] = []
+    current_width = 0.0
+    last_space = -1  # index in `current` of the last space, for word breaks
+    i = 0
+    n = len(text)
+    while i < n:
+        ch = text[i]
+        if ch == "\n":
+            lines.append(current)
+            current, current_width, last_space = [], 0.0, -1
+            i += 1
+            continue
+        w = font.text_length(ch, fontsize=fontsize)
+        if current and current_width + w > max_width:
+            if last_space >= 0:
+                head = current[:last_space]        # drop the breaking space
+                tail = current[last_space + 1:]
+                lines.append(head)
+                current = tail
+                current_width = sum(font.text_length(c, fontsize=fontsize) for c, _ in current)
+                last_space = -1
+            else:
+                lines.append(current)
+                current, current_width, last_space = [], 0.0, -1
+            continue  # re-test the same char against the fresh line
+        if ch == " ":
+            last_space = len(current)
+        current.append((ch, i))
+        current_width += w
+        i += 1
+    lines.append(current)
+    return lines
+
+
+def render_block_text_colored(page: Any, target: Any, origin_x: float, origin_y: float, text: str, style: dict[str, Any], font_kwargs: dict[str, Any], line_height: float, align: int, color_runs: list) -> bool:
+    """Manual per-character-color layout: wrap to the box, then draw each line
+    as contiguous same-color segments. Used only when color runs are present,
+    so the fast single-color insert_textbox path is untouched otherwise."""
+    import fitz
+
+    runs = color_run_rgb(color_runs, style["color"])
+
+    def color_at(offset: int) -> tuple[float, float, float]:
+        chosen = style["color"]
+        for run in runs:
+            if run["start"] <= offset < run["start"] + run["length"]:
+                chosen = run["rgb"]  # last covering run wins
+        return chosen
+
+    try:
+        font = fitz.Font(fontfile=font_kwargs["fontfile"]) if font_kwargs.get("fontfile") else fitz.Font(font_kwargs["fontname"])
+    except Exception:
+        font = fitz.Font("helv")
+
+    box_width = max(1.0, target.x1 - target.x0)
+    orig_size = float(style["fontsize"])
+    lh_factor = max(0.9, min(2.5, line_height / orig_size)) if (line_height and orig_size > 0) else 1.16
+    ascender = font.ascender or 0.8
+
+    size = orig_size
+    while size >= 6:
+        lines = _wrap_cells(text, font, size, box_width)
+        line_step = size * lh_factor
+        # First baseline sits one ascender below the box top; ensure the last
+        # line still fits above the page's bottom margin before committing.
+        first_baseline = origin_y + ascender * size
+        last_baseline = first_baseline + line_step * (len(lines) - 1)
+        if last_baseline <= page.rect.y1 - 6 or size <= 6:
+            baseline = first_baseline
+            for cells in lines:
+                if cells:
+                    line_w = sum(font.text_length(c, fontsize=size) for c, _ in cells)
+                    if align == fitz.TEXT_ALIGN_CENTER:
+                        x = origin_x + max(0.0, (box_width - line_w) / 2)
+                    elif align == fitz.TEXT_ALIGN_RIGHT:
+                        x = origin_x + max(0.0, box_width - line_w)
+                    else:
+                        x = origin_x
+                    seg = ""
+                    seg_color: tuple[float, float, float] | None = None
+                    for ch, idx in cells:
+                        col = color_at(idx)
+                        if seg and col != seg_color:
+                            page.insert_text((x, baseline), seg, fontsize=size, color=seg_color, **font_kwargs)
+                            x += font.text_length(seg, fontsize=size)
+                            seg = ""
+                        seg += ch
+                        seg_color = col
+                    if seg and seg_color is not None:
+                        page.insert_text((x, baseline), seg, fontsize=size, color=seg_color, **font_kwargs)
+                baseline += line_step
+            if style.get("underline"):
+                draw_text_underlines(page, fitz.Rect(target.x0, target.y0, target.x1, min(page.rect.y1 - 2, baseline + 4)), style.get("color"))
             return True
         size -= 0.5
     return False
@@ -876,6 +1001,15 @@ def cmd_replace_block(args: argparse.Namespace) -> int:
 
     scratch_files: list[str] = []
     new_text = args.text
+    # Per-word color spans (JSON: [{"start":int,"length":int,"hex":"#rrggbb"}]).
+    # Their presence forces full styled rendering (no per-line fast path).
+    color_runs = None
+    if getattr(args, "color_runs", None):
+        try:
+            parsed = json.loads(args.color_runs)
+            color_runs = parsed if isinstance(parsed, list) and parsed else None
+        except (ValueError, TypeError):
+            color_runs = None
     style, font_kwargs = resolve_block_style(doc, page, rect, args, new_text, scratch_files)
 
     # Identify which lines inside the rect actually belong to this block —
@@ -896,6 +1030,7 @@ def cmd_replace_block(args: argparse.Namespace) -> int:
         and not args.font_size and not args.color and not args.bold and not args.font
         and not getattr(args, "italic", False) and not getattr(args, "underline", False)
         and getattr(args, "align", "left") == "left"
+        and not color_runs
         and len(new_lines) == len(block_lines)
         and all(line.get("origin") for line in block_lines)
     )
@@ -954,6 +1089,7 @@ def cmd_replace_block(args: argparse.Namespace) -> int:
             page, rect.x0, rect.y0, rect.width, new_text,
             style, font_kwargs, args.line_height, args.expand,
             align=align_constant(getattr(args, "align", "left")),
+            color_runs=color_runs,
         )
 
     # Track Changes: leave a dashed blue review box whose note holds the
@@ -2317,6 +2453,7 @@ def build_parser() -> argparse.ArgumentParser:
     replace_block.add_argument("--line-height", type=float, default=0)
     replace_block.add_argument("--track-original")
     replace_block.add_argument("--original-text")
+    replace_block.add_argument("--color-runs")
     replace_block.set_defaults(func=cmd_replace_block)
 
     block_background = subparsers.add_parser("block-background")

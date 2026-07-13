@@ -23,6 +23,16 @@ struct PendingNote: Identifiable {
     var selection: PDFSelection?
 }
 
+/// A colored span within a block's text. Offsets index the FULL block text
+/// (the same string as `originalText`/the edited text; each newline counts as
+/// one character). Lets a Text Color pick recolor just the selected words
+/// instead of the whole block. Later runs win over earlier ones on overlap.
+struct ColorRun: Codable, Equatable {
+    var start: Int
+    var length: Int
+    var hex: String
+}
+
 /// A paragraph block being edited in place, PDF Expert style.
 struct ActiveTextBlock: Equatable {
     let page: Int              // 1-based
@@ -54,12 +64,17 @@ struct ActiveTextBlock: Equatable {
     /// Shading drawn behind the block (nil = leave background untouched).
     /// Committed together with the text edit so color + background persist.
     var backgroundHex: String?
+    /// Per-selection text-color spans over sub-ranges of the block's text
+    /// (empty = the whole block uses `colorHex`). Survives the async commit
+    /// hop via the per-selectionID snapshot, like every other style field.
+    var colorRuns: [ColorRun] = []
 
     var styleChanged: Bool {
         fontSize != originalFontSize || colorHex != originalColorHex
             || bold != originalBold || italic != originalItalic
             || underline || alignment != "left"
             || fontFamily != nil || backgroundHex != nil
+            || !colorRuns.isEmpty
     }
 
     var engineRectString: String {
@@ -181,9 +196,15 @@ final class AppStore: ObservableObject {
                     colorHex: block.colorHex, bold: block.bold,
                     italic: block.italic, underline: block.underline,
                     alignment: block.alignment,
-                    fontFamily: block.fontFamily, backgroundHex: block.backgroundHex
+                    fontFamily: block.fontFamily, backgroundHex: block.backgroundHex,
+                    colorRuns: block.colorRuns
                 )
                 pruneStyleSnapshots(&blockStyleBySelection, keep: block.selectionID)
+            } else {
+                // Editor closed: a stale per-word selection must not leak into
+                // the next block's Text Color taps.
+                activeBlockSelection = nil
+                activeBlockTextLength = 0
             }
         }
     }
@@ -202,7 +223,7 @@ final class AppStore: ObservableObject {
     }
     /// Style snapshots keyed by selectionID, surviving activeBlock/draft
     /// being cleared OR replaced by a new selection before the async commit reads them.
-    private struct BlockStyleSnapshot { let selectionID: Int; let fontSize: Double; let colorHex: String; let bold: Bool; let italic: Bool; let underline: Bool; let alignment: String; let fontFamily: String?; let backgroundHex: String? }
+    private struct BlockStyleSnapshot { let selectionID: Int; let fontSize: Double; let colorHex: String; let bold: Bool; let italic: Bool; let underline: Bool; let alignment: String; let fontFamily: String?; let backgroundHex: String?; let colorRuns: [ColorRun] }
     private struct DraftStyleSnapshot { let selectionID: Int; let fontName: String; let fontSize: Double; let colorHex: String; let bold: Bool; let italic: Bool; let underline: Bool; let alignment: String }
     private var blockStyleBySelection: [Int: BlockStyleSnapshot] = [:]
     private var draftStyleBySelection: [Int: DraftStyleSnapshot] = [:]
@@ -216,6 +237,15 @@ final class AppStore: ObservableObject {
     /// Other blocks on the active page (engine coords) — alignment guide
     /// candidates while dragging the active block.
     @Published var activeBlockGuides: [CGRect] = []
+    /// The open block editor's current text selection, bridged up from AppKit
+    /// (the selection lives in the NSTextView). Offsets index the FULL block
+    /// text. nil/empty means nothing is selected. Not @Published: it is read
+    /// imperatively when a Text Color swatch is tapped, and republishing it on
+    /// every caret move would churn the whole workspace.
+    var activeBlockSelection: NSRange?
+    /// Length of the editor's current text — lets a "select all" be treated as
+    /// a whole-block recolor rather than a run.
+    var activeBlockTextLength: Int = 0
     @Published var pendingImageURL: URL?
     @Published var pendingNote: PendingNote?
     @Published var pendingNoteText: String = ""
@@ -556,6 +586,25 @@ final class AppStore: ObservableObject {
         page.addAnnotation(annotation)
         commitDocumentChange(title: "Note")
     }
+    /// Apply a Text Color pick to the active block. When a non-empty sub-range
+    /// (that is NOT the entire text) is selected in the editor, only that range
+    /// changes — recorded as a `ColorRun` and previewed live over the editor's
+    /// text. Otherwise this falls back to today's whole-block recolor.
+    func applyBlockTextColor(_ hex: String) {
+        guard activeBlock != nil else { return }
+        if let range = activeBlockSelection,
+           range.length > 0,
+           !(range.location == 0 && range.length >= activeBlockTextLength) {
+            // Newer run appended last so it wins on any overlap; the engine
+            // and the live preview both apply runs in order.
+            activeBlock?.colorRuns.append(
+                ColorRun(start: range.location, length: range.length, hex: hex)
+            )
+        } else {
+            activeBlock?.colorHex = hex
+        }
+    }
+
     /// Change the active block's font family from the style panel.
     func setActiveBlockFont(_ family: String?) {
         editorLog.info("setActiveBlockFont \(family ?? "nil") activeBlock=\(self.activeBlock != nil)")
@@ -1018,6 +1067,7 @@ final class AppStore: ObservableObject {
             block.alignment = style.alignment
             block.fontFamily = style.fontFamily
             block.backgroundHex = style.backgroundHex
+            block.colorRuns = style.colorRuns
         }
         blockStyleBySelection[block.selectionID] = nil
         if activeBlock?.selectionID == block.selectionID {
@@ -1035,6 +1085,10 @@ final class AppStore: ObservableObject {
         // close that editor (document changes). Re-open it for them after.
         let displaced = activeBlock
         let trackOriginal = (trackChanges && textChanged) ? block.originalText : nil
+        // Serialize per-word color spans to a compact JSON array; only sent
+        // when the user actually colored a sub-range.
+        let colorRunsJSON: String? = block.colorRuns.isEmpty ? nil
+            : (try? JSONEncoder().encode(block.colorRuns)).flatMap { String(data: $0, encoding: .utf8) }
         runEngineOp(title: "Edit Text", onDone: { [weak self] in
             guard let self, let displaced else { return }
             self.editBlock(
@@ -1059,7 +1113,8 @@ final class AppStore: ObservableObject {
                 background: block.backgroundHex,
                 lineHeight: block.lineHeight,
                 trackOriginal: trackOriginal,
-                originalText: block.originalText
+                originalText: block.originalText,
+                colorRunsJSON: colorRunsJSON
             )
         }
     }
@@ -1137,6 +1192,7 @@ final class AppStore: ObservableObject {
             block.alignment = style.alignment
             block.fontFamily = style.fontFamily
             block.backgroundHex = style.backgroundHex
+            block.colorRuns = style.colorRuns
         }
         blockStyleBySelection[block.selectionID] = nil
         if activeBlock?.selectionID == block.selectionID {

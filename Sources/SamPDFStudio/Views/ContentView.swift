@@ -803,15 +803,15 @@ private struct TextStylePanel: View {
                         Spacer()
                         ColorPicker("", selection: Binding(
                             get: { Color(nsColor: NSColor(engineHex: block.colorHex) ?? .black) },
-                            set: { store.activeBlock?.colorHex = $0.engineHex }
+                            set: { store.applyBlockTextColor($0.engineHex) }
                         ))
                         .labelsHidden()
-                        .help("Custom text color")
+                        .help("Custom text color — recolors only the selected words")
                     }
                     HStack(spacing: 8) {
                         ForEach(Self.swatches, id: \.hex) { swatch in
                             Button {
-                                store.activeBlock?.colorHex = swatch.hex
+                                store.applyBlockTextColor(swatch.hex)
                             } label: {
                                 Circle()
                                     .fill(Color(nsColor: NSColor(engineHex: swatch.hex) ?? .black))
