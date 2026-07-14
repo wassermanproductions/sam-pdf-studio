@@ -88,6 +88,15 @@ claude mcp add sam-pdf-studio -- node /absolute/path/to/SamPDFStudio/mcp/sam-pdf
 
 It shells out to the same bundled PyMuPDF engine the app uses, so file paths go in and new file paths come out — inputs are never modified in place. See [`mcp/README.md`](mcp/README.md) for the full tool list and Hermes/Codex/generic setup.
 
+## Support
+
+A few people asked if they could send tips to support my work developing open source tools. So I set up an optional way in case anyone wants to.
+
+No pressure at all. Using the apps, sharing them, starring the repositories, and contributing code all help too. Thank you.
+
+- [GitHub Sponsors](https://github.com/sponsors/wassermanproductions)
+- [Ko-fi](https://ko-fi.com/samwasserman)
+
 ## License & credits
 
 **Apache License 2.0** — see [LICENSE](LICENSE). Free to use, modify, fork, and build on, commercially or otherwise.
