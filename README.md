@@ -75,7 +75,7 @@ QA scratch files land in `tmp/pdfs/qa`.
 
 ## Editing model
 
-PDFs do not behave like Word documents internally. The app uses the practical strategy common to non-Adobe editors: locate visible text, redact the old glyphs, then write replacement text into the same region. This works well for forms, invoices, drafts, labels, and quick corrections. Deep reflow of arbitrary PDF content is a much harder class of editor — for that, export to Word, edit, and re-export.
+PDFs do not behave like Word documents internally. The app uses a practical, widely used strategy: locate visible text, redact the old glyphs, then write replacement text into the same region. This works well for forms, invoices, drafts, labels, and quick corrections. Deep reflow of arbitrary PDF content is a much harder class of editor — for that, export to Word, edit, and re-export.
 
 ## Agent control (MCP)
 
