@@ -2,7 +2,7 @@ import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// PDF Expert-style page management: a grid of page thumbnails that supports
+/// Page management: a grid of page thumbnails that supports
 /// click-to-select, drag-to-reorder, and double-click to jump into reading.
 struct PagesGridView: View {
     @EnvironmentObject private var store: AppStore

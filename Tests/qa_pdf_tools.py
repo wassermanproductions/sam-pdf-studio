@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Checks for the PDF Expert parity tools: symbols (fill & sign stamps),
+"""Checks for the parity tools: symbols (fill & sign stamps),
 compression, page numbers, uniform page resizing, and redline review marks."""
 from __future__ import annotations
 

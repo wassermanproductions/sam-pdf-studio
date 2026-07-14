@@ -317,7 +317,7 @@ def system_font_file(raw_name: str, text: str) -> str | None:
 
 
 def resolve_replacement_font(doc: Any, page: Any, style: dict[str, Any], text: str, scratch: list[str]) -> dict[str, Any]:
-    """Pick the closest font for replacement text, PDF Expert style.
+    """Pick the closest font for replacement text, matching the original.
 
     Preference order: the document's own embedded font (when it covers the
     replacement's glyphs) -> an installed system font with the same family ->
@@ -982,7 +982,7 @@ def render_block_text_colored(page: Any, target: Any, origin_x: float, origin_y:
 def cmd_replace_block(args: argparse.Namespace) -> int:
     """Replace an entire text block: redact its area, re-render the new text
     with the block's own style (or explicit overrides), wrapping inside the
-    original box like PDF Expert's block editor."""
+    original box, like an in-place block editor."""
     import fitz
 
     output = Path(args.output)
@@ -1023,7 +1023,7 @@ def cmd_replace_block(args: argparse.Namespace) -> int:
 
     # When the edited text has the same number of lines as the block, render
     # line-by-line at each line's own origin and style — indents and
-    # right-aligned amounts stay exactly where they were (PDF Expert-like).
+    # right-aligned amounts stay exactly where they were.
     new_lines = new_text.split("\n")
     per_line = (
         complete
@@ -1628,7 +1628,7 @@ def cmd_replace_text(args: argparse.Namespace) -> int:
             font_size = base_font_size if args.match_style else args.font_size
 
             # Single-line replacements sit on the original baseline at the
-            # original size (like PDF Expert); shrink only if the new text
+            # original size; shrink only if the new text
             # would run off the right edge of the page.
             single_line = "\n" not in args.replace
             origin = style.get("origin")
@@ -2027,7 +2027,7 @@ def cmd_paste_region(args: argparse.Namespace) -> int:
 
     # Build a single-page scratch doc containing ONLY the clipped region as
     # live vector content (text stays selectable/searchable/redactable and
-    # razor sharp at any zoom — like PDF Expert). Everything outside the clip
+    # razor sharp at any zoom). Everything outside the clip
     # is redacted away so the embedded form holds no hidden content.
     region_doc = fitz.open()
     region_doc.insert_pdf(source_doc, from_page=args.source_page - 1, to_page=args.source_page - 1)

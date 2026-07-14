@@ -237,7 +237,7 @@ struct PDFPreviewView: NSViewRepresentable {
         }
     }
 
-    /// PDF Expert-style block editor. First click SELECTS the block — a
+    /// Block editor. First click SELECTS the block — a
     /// dashed frame you can drag from anywhere to move it. A second click
     /// puts the caret in to type (Return = new line, drag the border to
     /// move, click away or ⌘Return to apply, Esc to cancel).
@@ -389,7 +389,7 @@ struct PDFPreviewView: NSViewRepresentable {
             accent.setStroke()
             border.stroke()
 
-            // Circular handles like PDF Expert's block box.
+            // Circular handles on the block box.
             let radius: CGFloat = 3.5
             let points = [
                 NSPoint(x: bounds.minX + 1.5, y: bounds.midY),
@@ -491,7 +491,7 @@ struct PDFPreviewView: NSViewRepresentable {
         }
     }
 
-    /// Blue smart-guide lines shown while dragging a block, PDF Expert style.
+    /// Blue smart-guide lines shown while dragging a block.
     final class GuideOverlayView: NSView {
         var verticalLines: [CGFloat] = []
         var horizontalLines: [CGFloat] = []
@@ -519,7 +519,7 @@ struct PDFPreviewView: NSViewRepresentable {
         }
     }
 
-    /// PDF Expert-style hairline outline around the text span being edited —
+    /// Hairline outline around the text span being edited —
     /// a see-through frame, never a filled box.
     final class EditorOutlineView: NSView {
         override init(frame frameRect: NSRect) {
@@ -1413,7 +1413,7 @@ struct PDFPreviewView: NSViewRepresentable {
         // MARK: Alignment guides
 
         /// Snap the dragged frame to nearby block edges/centers and show
-        /// blue guide lines (PDF Expert-style smart guides).
+        /// blue guide lines (smart guides).
         private func snapFrame(_ proposed: NSRect) -> NSPoint {
             let content = NSRect(
                 x: proposed.minX + BlockEditorView.inset + 5,

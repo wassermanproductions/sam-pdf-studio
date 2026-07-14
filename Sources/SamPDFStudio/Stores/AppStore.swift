@@ -33,7 +33,7 @@ struct ColorRun: Codable, Equatable {
     var hex: String
 }
 
-/// A paragraph block being edited in place, PDF Expert style.
+/// A paragraph block being edited in place.
 struct ActiveTextBlock: Equatable {
     let page: Int              // 1-based
     let engineRect: CGRect     // top-origin page coordinates
@@ -903,7 +903,7 @@ final class AppStore: ObservableObject {
     // MARK: - Block editing (engine)
 
     /// Per-page text blocks, cached per document version so a click can
-    /// hit-test locally and open the editor instantly (PDF Expert feel).
+    /// hit-test locally and open the editor instantly.
     private var pageBlocksCache: [Int: [PDFEngineClient.EngineBlockPayload]] = [:]
     private var pageBlocksCacheRevision: Int = -1
 
@@ -1334,7 +1334,7 @@ final class AppStore: ObservableObject {
         let sourcePage = boundedPage(selectedPDFPage)
         let destinationPage = boundedPage(page)
         // Keep the moved section selected at its new spot so it can be
-        // dragged again immediately — direct manipulation, PDF Expert style.
+        // dragged again immediately — direct manipulation.
         let reselect = movedRectString(from: rect, toX: x, y: y)
         runEngineOp(title: "Move Region", onDone: { [weak self] in
             guard let self, let reselect else { return }
@@ -1486,7 +1486,7 @@ final class AppStore: ObservableObject {
         toast("Added \(added) pages — drag to reorder")
     }
 
-    /// PDF Expert-style Merge: pick several PDFs, and the combined document
+    /// Merge: pick several PDFs, and the combined document
     /// opens straight into the Pages grid to arrange — save comes after.
     func mergePDFFiles() {
         guard confirmDiscardIfDirty() else { return }

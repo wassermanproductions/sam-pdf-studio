@@ -56,7 +56,7 @@ def main() -> int:
     assert_contains(preview_view, "backgroundColor = .clear", "inline text editor is transparent")
     assert_contains(preview_view, "layer?.borderWidth = 0", "inline text editor has no heavy border")
 
-    # Block editing works like PDF Expert: click a paragraph, edit in place,
+    # Block editing works in place: click a paragraph, edit in place,
     # drag the frame to move, Esc cancels.
     assert_contains(preview_view, "class BlockEditorView", "block editor exists")
     assert_contains(preview_view, "characterIndexForInsertion", "click places the caret inside the block")
