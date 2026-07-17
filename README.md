@@ -8,6 +8,17 @@ A native macOS PDF editor with a direct, tactile working feel: click the page an
 
 ![Editing text in place with the Text style panel](docs/images/edit-text.png)
 
+## Download
+
+**[⬇ Download the latest release](https://github.com/wassermanproductions/sam-pdf-studio/releases/latest)** — a macOS app for Apple Silicon (`.dmg`). Open it and drag **Sam PDF Studio** to your Applications folder.
+
+First launch — two one-time things:
+
+1. The app isn't yet signed with an Apple Developer ID, so macOS will warn the first time you open it. **Right-click (or Control-click) the app → Open → Open** to get past the warning — you only do this once.
+2. On first launch it **sets up its PDF engine automatically** (a one-time install that needs an internet connection and takes a minute or two). Core editing works right after; for **OCR / searchable scans**, also install the system tools once with [Homebrew](https://brew.sh): `brew install qpdf tesseract ghostscript poppler`.
+
+Prefer to build from source instead? See **[Build & run](#build--run)** below.
+
 ## Features
 
 - **Edit text in place** — click a paragraph and it becomes a live box you type into: multi-line, matching the document's own font, size, and color. Change the font to **any family in your font library**, adjust size, and set **bold**, *italic*, underline, and alignment (left / center / right), plus text color and a highlight/background color. Drag the box's dashed frame to move the whole block — alignment guides snap the moved content's bottom edge onto the line below, so it lands exactly where you drop it.

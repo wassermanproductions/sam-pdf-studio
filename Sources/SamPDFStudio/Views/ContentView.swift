@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -78,6 +79,84 @@ struct ContentView: View {
             Button("OK", role: .cancel) { store.errorMessage = nil }
         } message: {
             Text(store.errorMessage ?? "")
+        }
+        .overlay {
+            // Blocking first-run overlay while the Python engine self-installs.
+            if store.engineSetup != .ready {
+                EngineSetupOverlayView()
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: store.engineSetup == .ready)
+    }
+}
+
+// MARK: - First-run engine setup overlay
+
+/// Full-screen blocking cover shown on first launch while the bundled Python
+/// engine installs. Dark and centered, matching the app's About-panel voice.
+private struct EngineSetupOverlayView: View {
+    @EnvironmentObject private var store: AppStore
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.94)
+                .ignoresSafeArea()
+
+            VStack(spacing: 18) {
+                Image(nsImage: NSApp.applicationIconImage)
+                    .resizable()
+                    .interpolation(.high)
+                    .frame(width: 96, height: 96)
+                    .shadow(color: .black.opacity(0.4), radius: 12, y: 4)
+
+                Text("Setting up Sam PDF Studio")
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.white)
+
+                switch store.engineSetup {
+                case .installing, .ready:
+                    Text("Installing the PDF engine — one time, needs an internet connection. This can take a minute or two.")
+                        .font(.callout)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                    ProgressView()
+                        .controlSize(.large)
+                        .tint(.white)
+                        .padding(.top, 4)
+
+                case .failed(let message):
+                    Text("Setup couldn't finish")
+                        .font(.headline)
+                        .foregroundStyle(.white)
+                    Text(message)
+                        .font(.callout)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.white.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                    VStack(spacing: 6) {
+                        Text("You can finish setup manually — open Terminal and run:")
+                            .font(.caption)
+                            .foregroundStyle(.white.opacity(0.7))
+                        Text(store.engineSetupScriptPath)
+                            .font(.system(.caption, design: .monospaced))
+                            .textSelection(.enabled)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.white.opacity(0.1), in: RoundedRectangle(cornerRadius: 6))
+                    }
+                    .padding(.top, 4)
+                    Button("Try Again") {
+                        store.bootstrapEngineIfNeeded()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .padding(.top, 4)
+                }
+            }
+            .frame(maxWidth: 440)
+            .padding(40)
         }
     }
 }

@@ -112,7 +112,24 @@ struct PendingRedlineReplace: Identifiable {
     let rects: String
 }
 
+/// First-launch state of the bundled Python engine. A distributed .app that
+/// has never run the dev build has no venv yet, so the app self-installs it on
+/// first launch and blocks the UI behind an overlay while that runs.
+enum EngineSetupState: Equatable {
+    case ready
+    case installing
+    case failed(String)
+}
+
+/// Carries the installer's failure output up to `bootstrapEngineIfNeeded`.
+struct EngineSetupFailure: Error {
+    let message: String
+}
+
 final class AppStore: ObservableObject {
+    /// Drives the first-launch engine-install overlay in ContentView.
+    @Published var engineSetup: EngineSetupState = .ready
+
     @Published var selectedOperation: PDFOperation = .read {
         didSet {
             if selectedOperation == .edit && oldValue != .edit {
@@ -312,6 +329,133 @@ final class AppStore: ObservableObject {
         trackChanges = UserDefaults.standard.bool(forKey: "trackChanges")
         recentFiles = Self.loadRecents()
         Self.purgeStaleSessions()
+
+        // Show the install overlay from the very first frame if the engine venv
+        // isn't there yet, so a fresh .app never flashes a broken UI before the
+        // real check + install kick off in bootstrapEngineIfNeeded().
+        let venvPython = PDFEngineClient.defaultVenvURL.appendingPathComponent("bin/python3")
+        if !FileManager.default.isExecutableFile(atPath: venvPython.path) {
+            engineSetup = .installing
+        }
+    }
+
+    // MARK: - First-launch engine setup
+
+    /// Path to the bundled first-run installer (shown in the manual-fallback
+    /// message and used to run the install). Falls back to the repo copy when
+    /// running unbundled (dev builds via `swift run`).
+    var engineSetupScriptPath: String {
+        Bundle.main.url(forResource: "setup-engine", withExtension: "sh")?.path
+            ?? engine.projectRoot.appendingPathComponent("script/setup-engine.sh").path
+    }
+
+    /// On launch, make sure the Python engine venv exists and can import the
+    /// core PDF stack. If not (fresh install), run the bundled setup-engine.sh
+    /// on a background queue and drive `engineSetup` so the UI can block behind
+    /// an overlay until it's ready.
+    func bootstrapEngineIfNeeded() {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+            if self.engineCoreReady() {
+                DispatchQueue.main.async { self.engineSetup = .ready }
+                return
+            }
+            DispatchQueue.main.async { self.engineSetup = .installing }
+            let result = self.runEngineSetupScript()
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self.engineSetup = .ready
+                case .failure(let failure):
+                    self.engineSetup = .failed(failure.message)
+                }
+            }
+        }
+    }
+
+    /// True when the venv python exists and can import the core PDF stack
+    /// (fitz + pypdf). OCR and optional conversions are intentionally ignored —
+    /// their absence must not force a reinstall on every launch.
+    private func engineCoreReady() -> Bool {
+        let venvPython = PDFEngineClient.defaultVenvURL.appendingPathComponent("bin/python3")
+        guard FileManager.default.isExecutableFile(atPath: venvPython.path) else { return false }
+        let process = Process()
+        process.executableURL = venvPython
+        process.arguments = ["-c", "import fitz, pypdf"]
+        process.standardOutput = FileHandle.nullDevice
+        process.standardError = FileHandle.nullDevice
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
+    }
+
+    /// Run the bundled setup-engine.sh, pointing it at the app's bundled engine
+    /// script + requirements. Returns the trimmed installer output on failure.
+    private func runEngineSetupScript() -> Result<Void, EngineSetupFailure> {
+        let bundle = Bundle.main
+        guard let scriptURL = bundle.url(forResource: "setup-engine", withExtension: "sh")
+            ?? existingURL(engine.projectRoot.appendingPathComponent("script/setup-engine.sh")) else {
+            return .failure(EngineSetupFailure(message: "Could not find setup-engine.sh in the app bundle."))
+        }
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/bash")
+        process.arguments = [scriptURL.path]
+
+        // Run from a neutral, never-TCC-protected directory (see run() in
+        // PDFEngineClient) so the install never hangs on a folder prompt.
+        let neutralCWD = FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Library/Application Support/SamPDFStudio", isDirectory: true)
+        try? FileManager.default.createDirectory(at: neutralCWD, withIntermediateDirectories: true)
+        process.currentDirectoryURL = neutralCWD
+
+        var environment = ProcessInfo.processInfo.environment
+        if let engineScript = bundle.url(forResource: "pdf_engine", withExtension: "py")
+            ?? existingURL(engine.projectRoot.appendingPathComponent("Engine/pdf_engine.py")) {
+            environment["SAMPDF_ENGINE_SCRIPT"] = engineScript.path
+        }
+        if let requirements = bundle.url(forResource: "requirements", withExtension: "txt")
+            ?? existingURL(engine.projectRoot.appendingPathComponent("Engine/requirements.txt")) {
+            environment["SAMPDF_REQUIREMENTS"] = requirements.path
+        }
+        let existingPath = environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"
+        environment["PATH"] = ["/opt/homebrew/bin", "/usr/local/bin", existingPath].joined(separator: ":")
+        process.environment = environment
+
+        let stdout = Pipe()
+        let stderr = Pipe()
+        process.standardOutput = stdout
+        process.standardError = stderr
+
+        do {
+            try process.run()
+        } catch {
+            return .failure(EngineSetupFailure(message: "Could not start the engine installer: \(error.localizedDescription)"))
+        }
+        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
+        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let combined = [String(data: outData, encoding: .utf8) ?? "", String(data: errData, encoding: .utf8) ?? ""]
+                .joined(separator: "\n")
+            // Surface the last few lines — the actionable part of the failure.
+            let tail = combined
+                .split(separator: "\n", omittingEmptySubsequences: true)
+                .suffix(6)
+                .joined(separator: "\n")
+            let message = tail.isEmpty ? "The engine installer exited with an error." : tail
+            return .failure(EngineSetupFailure(message: message))
+        }
+        return .success(())
+    }
+
+    private func existingURL(_ url: URL) -> URL? {
+        FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     /// Remove session directories left behind by previous runs.

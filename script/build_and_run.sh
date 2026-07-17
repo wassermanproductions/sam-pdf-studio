@@ -38,6 +38,14 @@ chmod +x "$APP_BINARY"
 cp "$ROOT_DIR/Engine/pdf_engine.py" "$APP_CONTENTS/Resources/pdf_engine.py"
 ENGINE_SCRIPT="$APP_CONTENTS/Resources/pdf_engine.py"
 
+# Bundle the first-run engine installer + its requirements so a distributed
+# .app can self-install the Python engine on a Mac that never ran this script.
+# The app runs setup-engine.sh (with SAMPDF_ENGINE_SCRIPT/SAMPDF_REQUIREMENTS
+# pointed at these Resources) the first time the venv is missing.
+cp "$ROOT_DIR/script/setup-engine.sh" "$APP_CONTENTS/Resources/setup-engine.sh"
+chmod +x "$APP_CONTENTS/Resources/setup-engine.sh"
+cp "$ROOT_DIR/Engine/requirements.txt" "$APP_CONTENTS/Resources/requirements.txt"
+
 # App icon (Dock, Finder, About window). CFBundleIconFile points at this.
 cp "$ROOT_DIR/Resources/AppIcon.icns" "$APP_CONTENTS/Resources/AppIcon.icns"
 

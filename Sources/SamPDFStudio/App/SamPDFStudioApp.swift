@@ -158,6 +158,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
+        // First launch of a distributed .app has no Python engine venv yet;
+        // install it (blocking the UI behind an overlay) before the user works.
+        store.bootstrapEngineIfNeeded()
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
