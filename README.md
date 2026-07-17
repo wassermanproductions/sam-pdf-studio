@@ -14,7 +14,9 @@ A native macOS PDF editor with a direct, tactile working feel: click the page an
 
 First launch — two one-time things:
 
-1. The app isn't yet signed with an Apple Developer ID, so macOS will warn the first time you open it. **Right-click (or Control-click) the app → Open → Open** to get past the warning — you only do this once.
+1. The app isn't yet signed with an Apple Developer ID, so macOS will warn the first time you open it (you only deal with this once):
+   - **Right-click (or Control-click) the app → Open → Open.**
+   - On the latest macOS, if that's blocked, instead open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Sam PDF Studio.
 2. On first launch it **sets up its PDF engine automatically** (a one-time install that needs an internet connection and takes a minute or two). Core editing works right after; for **OCR / searchable scans**, also install the system tools once with [Homebrew](https://brew.sh): `brew install qpdf tesseract ghostscript poppler`.
 
 Prefer to build from source instead? See **[Build & run](#build--run)** below.
