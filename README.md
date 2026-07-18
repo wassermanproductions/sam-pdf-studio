@@ -10,13 +10,22 @@ A native macOS PDF editor with a direct, tactile working feel: click the page an
 
 ## Download
 
-**[⬇ Download the latest release](https://github.com/wassermanproductions/sam-pdf-studio/releases/latest)** — a macOS app for Apple Silicon (`.dmg`). Open it and drag **Sam PDF Studio** to your Applications folder.
+**Easiest install — paste one line into Terminal** (⌘-Space, type "Terminal")
+and it downloads the latest build, installs it to Applications, and opens it —
+no security warnings:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/wassermanproductions/sam-pdf-studio/main/install.sh | bash
+```
+
+Or **[⬇ download the latest release](https://github.com/wassermanproductions/sam-pdf-studio/releases/latest)** — a macOS app for Apple Silicon (`.dmg`). Open it and drag **Sam PDF Studio** to your Applications folder.
 
 First launch — two one-time things:
 
-1. The app isn't yet signed with an Apple Developer ID, so macOS will warn the first time you open it (you only deal with this once):
-   - **Right-click (or Control-click) the app → Open → Open.**
-   - On the latest macOS, if that's blocked, instead open **System Settings → Privacy & Security**, scroll down, and click **Open Anyway** next to Sam PDF Studio.
+1. If you downloaded the `.dmg` in a browser (rather than using the one-line installer), the app isn't Apple-notarized yet, so macOS falsely claims it "is damaged." It isn't — paste this into Terminal once and it opens normally from then on:
+   ```bash
+   xattr -cr "/Applications/SamPDFStudio.app"
+   ```
 2. On first launch it **sets up its PDF engine automatically** (a one-time install that needs an internet connection and takes a minute or two). Core editing works right after; for **OCR / searchable scans**, also install the system tools once with [Homebrew](https://brew.sh): `brew install qpdf tesseract ghostscript poppler`.
 
 Prefer to build from source instead? See **[Build & run](#build--run)** below.
