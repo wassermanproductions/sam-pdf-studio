@@ -2,6 +2,13 @@
   <img src="docs/images/logo.png" alt="Sam PDF Studio" width="380">
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
+  <a href="../../releases/latest"><img src="https://img.shields.io/github/v/release/wassermanproductions/sam-pdf-studio?include_prereleases&label=download" alt="Latest release"></a>
+  <img src="https://img.shields.io/badge/platforms-macOS-2f7bf6" alt="Platforms">
+  <a href="https://ko-fi.com/samwasserman"><img src="https://img.shields.io/badge/Ko--fi-support%20Sam%20Wasserman-ff5e5b?logo=kofi&logoColor=white" alt="Support Sam Wasserman on Ko-fi"></a>
+</p>
+
 # Sam PDF Studio
 
 A native macOS PDF editor with a direct, tactile working feel: click the page and it happens — no coordinates, no forms, no output-folder litter. A SwiftUI/PDFKit front end drives a local PDF engine, so every document stays on your Mac.
